@@ -1,0 +1,108 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+use POSIX;
+use YAML::Tiny;
+
+## Radius call us via 
+## radius-ipset %{Acct-Status-Type} %{User-Name} %{Framed-IP-Address}"
+## Acct-Status-Type is either Start or Stop (first character uppercased)
+## User-Name is the unix login username, like mdom or ak
+## Framed-IP-Address is the local ip address the client gets assigned
+
+my ($type,$user,$ip) = @ARGV;
+
+# if (!$type or $type ne 'Start' or $type ne 'Stop' or !$user or !$ip) {
+# 	die "Usage: $0 Start|Stop USER IP\n";
+# }
+
+my $config_file = "/etc/taztunnel.yaml";
+
+my $config = YAML::Tiny->read($config_file)
+  or die "Can't parse $config_file: $YAML::Tiny::errstr\n";
+# we just need the first document
+$config = $config->[0];
+
+## to make sure our set exists
+system('/usr/sbin/ipset','-exist','create','ipsec_allowed','hash:ip,port,net') == 0
+	or die "Can't call ipset create: $!\n";
+
+## Stop is easy, we just call ipset list and search for every line that
+## begins with our assigned ip and delete it
+
+if ($type eq 'Stop') {
+	open(my $fh,'-|', qw(/usr/sbin/ipset list ipsec_allowed))
+		or die "Can't call ipset list: $!\n";
+	while ( my $rule = <$fh> ) {
+		next unless $rule =~ /^$ip/o;
+		chomp($rule);
+		system('/usr/sbin/ipset','-exist','del','ipsec_allowed',$rule) == 0
+			or die "Can't call ipset del: $!\n";
+	}
+}
+
+## Start is more complicated ...
+
+elsif ($type eq 'Start') {
+
+	## ... first we get all groups the user belongs to
+
+	my $groups = qx(groups $user);
+	$groups =~ s/[^:]+ : //;
+
+	my @groups = sort split(' ',$groups);
+
+	my @rules;
+
+	## ... then we check for every groups if theres a corresponding
+	## section in the group section of the configuration file
+
+	for my $group_name (@groups){
+	    if ( my $entry = $config->{groups}->{$group_name} ) {
+		    push @rules, get_rules_with_includes($entry);
+	    }
+	}
+
+	## ... after that we check if there are user specific rules in
+	## the user section
+
+	if ( my $entry = $config->{user}->{$user} ) {
+		push @rules, get_rules_with_includes($entry);
+	}
+
+	## if we haven't found any rules in either section we use the
+	## default section
+
+	if ( my $entry = $config->{default} and !@rules ) {
+		push @rules, get_rules_with_includes($entry)
+	}
+
+	foreach my $rule (@rules) {
+		my ( $network, $port ) = split( ':', $rule, 2 );
+		system('/usr/sbin/ipset','-exist','add','ipsec_allowed',"$ip,$port,$network") == 0
+			or die "Can't call ipset add: $!\n";
+	}
+}
+
+exit 0;
+
+sub get_rules_with_includes {
+    my ($entry) = @_;
+    my @rules;
+    if ( defined $entry->{rules} ) {
+	    push @rules, @{ $entry->{rules} };
+    }
+    if ( exists $entry->{include} ) {
+        for my $include ( @{ $entry->{include} } ) {
+            if ( not defined $config->{includes}->{$include} ) {
+		    die "Can't find include $include in config.\n"
+		}
+            push @rules, @{ $config->{includes}->{$include} };
+        }
+    }
+    return @rules;
+}
+
+__END__

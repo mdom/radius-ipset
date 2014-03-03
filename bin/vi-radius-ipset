@@ -1,0 +1,49 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+use IO::Prompter;
+use Term::ReadKey;
+use YAML::Tiny;
+use File::Copy;
+
+my $config_file = '/etc/taztunnel.yaml';
+my $bak_file    = "$config_file.bak";
+
+if ( -e $bak_file ) {
+	die "$0: $config_file busy, try again later\n";
+}
+
+File::Copy::copy($config_file,$bak_file);
+
+do {
+	system($ENV{VISUAL} || $ENV{EDITOR} || 'vi', $bak_file );
+} until test_config();
+
+rename($bak_file,$config_file);
+
+sub test_config {
+	if ( ! YAML::Tiny->read($bak_file) ) {
+		print "Can't parse $config_file: $YAML::Tiny::errstr\n";
+		my $choice = prompt 'What to do...', -echo, -single, -number, -menu => [
+			'edit config file again',
+			'exit without saving changes to config file',
+			'Quit and save changes to config file (DANGER!)'
+		];
+		if ( $choice eq 'edit config file again' ) {
+			return 0;
+		}
+		elsif ( $choice eq 'exit without saving changes to config file' ) {
+			unlink $bak_file;
+			exit 0;
+		}
+		elsif ( $choice eq 'Quit and save changes to config file (DANGER!)' ) {
+			return 1;
+		}
+		else {
+			scalar prompt('Unknown choince. Press any key to reedit config', -echo, -single);
+		}
+	}
+	return 1;
+}
+
