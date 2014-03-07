@@ -1,0 +1,86 @@
+=pod
+
+=head1 radius-ipset
+
+radius-ipset allows you to restrict access to your network based on the
+username and group membership. The restrictions are set every time a user logs
+in and are removed after logging out and are not tied to any special
+preallocation of network addresses, so you can freely give users IP addresses
+from a pool.
+
+Internally radius-ipset uses iptables and specific its ipset module. For using
+this script group memberships have to be resolvable by the the I<groups>
+command, though user accounts don't have to be so this is not a hard requirement.
+
+=head1 Installation
+
+To just use the radius-ipset module you need to install YAML::Tiny, which is a
+fairly common module and can be installed on Debian system with:
+
+  apt-get install libyaml-tiny-perl
+
+This distribtion also ships the script vi-radius-ipset, which can be
+used to edit the configuration file. It will lock the file and check
+if its syntactically correct after changing it. It needs IO::Prompter,
+File::Copy and Term::Readkey, which should be equally easy to install
+in most distributions. Again for Debian:
+
+  apt-get install libio-prompter-perl libterm-readkey-perl
+
+Then you just need to copy the script to the corresponding directories. I
+just demonstrate again for Debian, but it should be very similar on
+other distributions. It just depends where your freeradius configuration
+resides.
+
+  cp bin/* /usr/local/sbin/
+  cp modules/* /etc/freeradius/modules/
+
+The module has to be activated in the accounting section of your site. On my
+host I had to edit I</etc/freeradius/sites-enabled/default>.
+
+  accounting {
+        ...
+        exec
+        ipset
+        ...
+  }
+
+=head1 Configuration
+
+radius-ipset reads its configuration from I</etc/radius-ipset.yaml>. 
+
+  includes:
+    base:
+    - 10.2.0.0/24:80
+  default:
+    include:
+      - base
+  groups:
+    users:
+      include:
+      - base
+      rules:
+      - 10.1.0.0/24:80
+      - 10.1.0.0/24:443
+    admin:
+      include:
+      - base
+      rules:
+      - 10.1.0.0/24:22
+      - 10.1.0.0/24:80
+      - 10.1.0.0/24:443
+  user:
+    mdom:
+      include:
+      - base
+      rules:
+      - 10.1.0.0/25:8181
+  setname: ipsec_allowed
+
+All rules are additive and includes are treated as written out under
+the rules section. If no user or group is matched the connected user get
+access to all rules under the default section. The rules in the default
+section are not automatically assigned to every connected user! The
+setname shown here is the default.
+
+=cut
