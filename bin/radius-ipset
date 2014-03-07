@@ -18,7 +18,7 @@ my ($type,$user,$ip) = @ARGV;
 # 	die "Usage: $0 Start|Stop USER IP\n";
 # }
 
-my $config_file = "/etc/taztunnel.yaml";
+my $config_file = "/etc/radius-ipset.yaml";
 
 my $config = YAML::Tiny->read($config_file)
   or die "Can't parse $config_file: $YAML::Tiny::errstr\n";
