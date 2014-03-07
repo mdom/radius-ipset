@@ -25,20 +25,22 @@ my $config = YAML::Tiny->read($config_file)
 # we just need the first document
 $config = $config->[0];
 
+my $setname = $config->{setname} || 'ipsec_allowed';
+
 ## to make sure our set exists
-system('/usr/sbin/ipset','-exist','create','ipsec_allowed','hash:ip,port,net') == 0
+system('/usr/sbin/ipset','-exist','create',$setname,'hash:ip,port,net') == 0
 	or die "Can't call ipset create: $!\n";
 
 ## Stop is easy, we just call ipset list and search for every line that
 ## begins with our assigned ip and delete it
 
 if ($type eq 'Stop') {
-	open(my $fh,'-|', qw(/usr/sbin/ipset list ipsec_allowed))
+	open(my $fh,'-|', '/usr/sbin/ipset','list',$setname)
 		or die "Can't call ipset list: $!\n";
 	while ( my $rule = <$fh> ) {
 		next unless $rule =~ /^$ip/o;
 		chomp($rule);
-		system('/usr/sbin/ipset','-exist','del','ipsec_allowed',$rule) == 0
+		system('/usr/sbin/ipset','-exist','del',$setname,$rule) == 0
 			or die "Can't call ipset del: $!\n";
 	}
 }
@@ -81,7 +83,7 @@ elsif ($type eq 'Start') {
 
 	foreach my $rule (@rules) {
 		my ( $network, $port ) = split( ':', $rule, 2 );
-		system('/usr/sbin/ipset','-exist','add','ipsec_allowed',"$ip,$port,$network") == 0
+		system('/usr/sbin/ipset','-exist','add',$setname,"$ip,$port,$network") == 0
 			or die "Can't call ipset add: $!\n";
 	}
 }
