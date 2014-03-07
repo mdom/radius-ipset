@@ -7,7 +7,7 @@ use Term::ReadKey;
 use YAML::Tiny;
 use File::Copy;
 
-my $config_file = '/etc/taztunnel.yaml';
+my $config_file = '/etc/radius-ipset.yaml';
 my $bak_file    = "$config_file.bak";
 
 if ( -e $bak_file ) {
