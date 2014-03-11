@@ -49,19 +49,12 @@ if ($type eq 'Stop') {
 
 elsif ($type eq 'Start') {
 
-	## ... first we get all groups the user belongs to
-
-	my $groups = qx(groups $user);
-	$groups =~ s/[^:]+ : //;
-
-	my @groups = sort split(' ',$groups);
-
 	my @rules;
 
-	## ... then we check for every groups if theres a corresponding
-	## section in the group section of the configuration file
+	# first we check for every group the user belongs to if theres a
+	# corresponding section in the group section of the configuration file
 
-	for my $group_name (@groups){
+	for my $group_name (get_groups_for($user)){
 	    if ( my $entry = $config->{groups}->{$group_name} ) {
 		    push @rules, get_rules_with_includes($entry);
 	    }
@@ -89,6 +82,19 @@ elsif ($type eq 'Start') {
 }
 
 exit 0;
+
+sub get_groups_for {
+    my $user = shift;
+    return if !$user;
+    my @group_names;
+    while ( my ( $name, $pw, $gid, $members ) = getgrent ) {
+        if ( grep { $_ eq $user } split( " ", $members ) ) {
+            push( @group_names, $name );
+        }
+    }
+    endgrent;
+    return sort @group_names;
+}
 
 sub get_rules_with_includes {
     my ($entry) = @_;
