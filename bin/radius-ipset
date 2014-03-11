@@ -77,7 +77,10 @@ elsif ($type eq 'Start') {
 	foreach my $rule (@rules) {
 		my ( $network, $port ) = split( ':', $rule, 2 );
 		system('/usr/sbin/ipset','-exist','add',$setname,"$ip,$port,$network") == 0
-			or die "Can't call ipset add: $!\n";
+			# Do not die here! ipset add can die because a
+			# $network is not resolvable. Just warn and hope
+			# somebody sees the warning.
+			or warn "Error calling ipset add: $!\n";
 	}
 }
 
