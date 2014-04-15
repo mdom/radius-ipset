@@ -6,24 +6,24 @@ use IO::Prompter;
 use Term::ReadKey;
 use YAML::Tiny;
 use File::Copy;
+use Fcntl ':flock';
+use File::Temp qw(tempfile);
+use File::Copy qw(copy move);
 
 my $config_file = '/etc/radius-ipset.yaml';
-my $bak_file    = "$config_file.bak";
-
-if ( -e $bak_file ) {
-	die "$0: $config_file busy, try again later\n";
-}
-
-File::Copy::copy($config_file,$bak_file);
+open( my $fhlock, '+<', $config_file ) or die "Can't open $config_file: $!";
+flock( $fhlock, LOCK_EX ) or die "Can't flock $config_file: $!";
+my ( $fh, $tempfile ) = tempfile( UNLINK => 1 );
+copy( $config_file, $tempfile );
 
 do {
-	system($ENV{VISUAL} || $ENV{EDITOR} || 'vi', $bak_file );
+	system($ENV{VISUAL} || $ENV{EDITOR} || 'vi', $tempfile );
 } until test_config();
 
-rename($bak_file,$config_file);
+rename($tempfile,$config_file);
 
 sub test_config {
-	if ( ! YAML::Tiny->read($bak_file) ) {
+	if ( ! YAML::Tiny->read($tempfile) ) {
 		print "Can't parse $config_file: $YAML::Tiny::errstr\n";
 		my $choice = prompt 'What to do...', -echo, -single, -number, -menu => [
 			'edit config file again',
@@ -34,7 +34,6 @@ sub test_config {
 			return 0;
 		}
 		elsif ( $choice eq 'exit without saving changes to config file' ) {
-			unlink $bak_file;
 			exit 0;
 		}
 		elsif ( $choice eq 'Quit and save changes to config file (DANGER!)' ) {
